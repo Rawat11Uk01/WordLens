@@ -1,0 +1,181 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ------------------------------- Toolbar --------------------------------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.toolbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  margin-right: 6px;
+}
+.toolbar__brand svg {
+  color: var(--accent);
+}
+.toolbar__spacer {
+  flex: 1;
+}
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.toolbar__pageinfo {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 90px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.toolbar__zoom {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 46px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------- PDF area -------------------------------- */
+.pdf-scroll {
+  flex: 1;
+  overflow: auto;
+  background: var(--pdf-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 80px;
+  gap: 18px;
+}
+
+.pdf-page {
+  position: relative;
+  background: #fff;
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+}
+.pdf-page__canvas {
+  display: block;
+}
+.pdf-page__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #555;
+  font-size: 14px;
+  background: #fff;
+}
+
+/* Make the selectable text layer sit on top of the canvas. */
+.pdf-page .textLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.pdf-page .textLayer ::selection {
+  background: rgba(79, 70, 229, 0.35);
+}
+
+/* ------------------------------ Empty state ------------------------------ */
+.dropzone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.dropzone__inner {
+  text-align: center;
+  padding: 60px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  max-width: 460px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.dropzone.is-over .dropzone__inner {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dropzone__inner svg {
+  color: var(--accent);
+}
+.dropzone h1 {
+  font-size: 20px;
+  margin: 16px 0 6px;
+}
+.dropzone p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+.dropzone__hint {
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.dropzone__hint kbd {
+  font-family: var(--font-mono);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* ------------------------------- Spinner --------------------------------- */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------ Toast ------------------------------------ */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  animation: toast-in 200ms ease;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
