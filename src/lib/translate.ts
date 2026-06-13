@@ -12,6 +12,8 @@
  * blocks or breaks the rest of the popup.
  */
 
+import { getCachedTranslation, setCachedTranslation } from './storage'
+
 const GOOGLE_BASE = 'https://translate.googleapis.com/translate_a/single'
 const MYMEMORY_BASE = 'https://api.mymemory.translated.net/get'
 
@@ -40,10 +42,19 @@ export async function translateToHindi(
   const q = text.trim()
   if (!q) return null
 
-  const viaGoogle = await translateViaGoogle(q, signal)
-  if (viaGoogle) return viaGoogle
+  // Cache-first: instant repeats, and resilient when offline for seen words.
+  const cached = await getCachedTranslation(q)
+  if (cached.cached) return cached.value
 
-  return translateViaMyMemory(q, signal)
+  const viaGoogle = await translateViaGoogle(q, signal)
+  if (viaGoogle) {
+    void setCachedTranslation(q, viaGoogle)
+    return viaGoogle
+  }
+
+  const viaMyMemory = await translateViaMyMemory(q, signal)
+  void setCachedTranslation(q, viaMyMemory)
+  return viaMyMemory
 }
 
 /* --------------------------------- Google ---------------------------------- */

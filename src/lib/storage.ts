@@ -1,5 +1,6 @@
 import {
   DEFAULT_SETTINGS,
+  type DictionaryEntry,
   type HistoryEntry,
   type SavedWord,
   type Settings
@@ -8,8 +9,13 @@ import {
 const KEYS = {
   saved: 'savedWords',
   history: 'history',
-  settings: 'settings'
+  settings: 'settings',
+  lookupCache: 'lookupCacheV1',
+  translationCache: 'translationCacheV1'
 } as const
+
+/** Max entries kept per cache (oldest are evicted first). */
+const CACHE_LIMIT = 600
 
 /**
  * Thin wrapper around chrome.storage.local with a localStorage fallback so the
@@ -130,6 +136,59 @@ export async function addHistory(word: string): Promise<HistoryEntry[]> {
 
 export async function clearHistory(): Promise<void> {
   await writeRaw(KEYS.history, [])
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lookup & translation cache                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Evict oldest entries (insertion order) until the cache is within the limit.
+ * Relies on JS objects preserving string-key insertion order.
+ */
+function trimCache<T>(cache: Record<string, T>): void {
+  const keys = Object.keys(cache)
+  if (keys.length <= CACHE_LIMIT) return
+  for (const key of keys.slice(0, keys.length - CACHE_LIMIT)) {
+    delete cache[key]
+  }
+}
+
+export async function getCachedEntry(word: string): Promise<DictionaryEntry | null> {
+  const cache = await readRaw<Record<string, DictionaryEntry>>(KEYS.lookupCache, {})
+  return cache[word.trim().toLowerCase()] ?? null
+}
+
+export async function setCachedEntry(word: string, entry: DictionaryEntry): Promise<void> {
+  const cache = await readRaw<Record<string, DictionaryEntry>>(KEYS.lookupCache, {})
+  const key = word.trim().toLowerCase()
+  // Re-insert at the end so it counts as most-recently-used.
+  delete cache[key]
+  cache[key] = entry
+  trimCache(cache)
+  await writeRaw(KEYS.lookupCache, cache)
+}
+
+export interface CachedTranslation {
+  /** Whether a value was cached at all (distinguishes a cached `null`). */
+  cached: boolean
+  value: string | null
+}
+
+export async function getCachedTranslation(word: string): Promise<CachedTranslation> {
+  const cache = await readRaw<Record<string, string | null>>(KEYS.translationCache, {})
+  const key = word.trim().toLowerCase()
+  if (key in cache) return { cached: true, value: cache[key] }
+  return { cached: false, value: null }
+}
+
+export async function setCachedTranslation(word: string, value: string | null): Promise<void> {
+  const cache = await readRaw<Record<string, string | null>>(KEYS.translationCache, {})
+  const key = word.trim().toLowerCase()
+  delete cache[key]
+  cache[key] = value
+  trimCache(cache)
+  await writeRaw(KEYS.translationCache, cache)
 }
 
 /* -------------------------------------------------------------------------- */

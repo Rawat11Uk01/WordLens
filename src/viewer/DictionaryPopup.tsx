@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DictionaryError, lookupWord, normalizeWord } from '@/lib/dictionary'
+import { DictionaryError, lookupWord, normalizeWord, pickSimpleDefinition } from '@/lib/dictionary'
 import { translateToHindi } from '@/lib/translate'
 import { explainInContext, OllamaError } from '@/lib/ollama'
 import { addHistory, isWordSaved, removeWord, saveWord, getSavedWords } from '@/lib/storage'
@@ -32,6 +32,10 @@ const POPUP_WIDTH = 360
 export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
   const word = useMemo(() => normalizeWord(anchor.word), [anchor.word])
   const [entry, setEntry] = useState<DictionaryEntry | null>(null)
+  const simpleMeaning = useMemo(
+    () => (entry ? pickSimpleDefinition(entry.meanings) : undefined),
+    [entry]
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ message: string; notFound: boolean } | null>(null)
   const [saved, setSaved] = useState(false)
@@ -306,8 +310,10 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
               {/* Primary meaning (English) with the Hindi translation alongside —
                   the thing readers most want, shown first. */}
               <div className="primary">
-                {entry.meanings[0]?.definition && (
-                  <p className="primary__meaning">{entry.meanings[0].definition}</p>
+                {(simpleMeaning ?? entry.meanings[0]?.definition) && (
+                  <p className="primary__meaning">
+                    {simpleMeaning ?? entry.meanings[0]?.definition}
+                  </p>
                 )}
                 {hindiLoading ? (
                   <div className="primary__hindi">
