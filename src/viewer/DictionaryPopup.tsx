@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DictionaryError, lookupWord, normalizeWord } from '@/lib/dictionary'
+import { translateToHindi } from '@/lib/translate'
 import { explainInContext, OllamaError } from '@/lib/ollama'
 import { addHistory, isWordSaved, removeWord, saveWord, getSavedWords } from '@/lib/storage'
 import type { DictionaryEntry, Settings } from '@/lib/types'
@@ -34,6 +35,9 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ message: string; notFound: boolean } | null>(null)
   const [saved, setSaved] = useState(false)
+
+  const [hindi, setHindi] = useState<string | null>(null)
+  const [hindiLoading, setHindiLoading] = useState(true)
 
   const [explaining, setExplaining] = useState(false)
   const [explanation, setExplanation] = useState('')
@@ -71,6 +75,26 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
     return () => controller.abort()
   }, [word])
 
+  /* ----------------------------- Hindi translation --------------------------- */
+  // Fetched in parallel with the dictionary so the meaning + Hindi can show up
+  // top. Best-effort: failures simply hide the Hindi line.
+  useEffect(() => {
+    const controller = new AbortController()
+    setHindi(null)
+    setHindiLoading(true)
+    translateToHindi(word, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setHindi(result)
+      })
+      .catch(() => {
+        /* keep Hindi empty on failure */
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHindiLoading(false)
+      })
+    return () => controller.abort()
+  }, [word])
+
   useEffect(() => {
     isWordSaved(word).then(setSaved)
   }, [word])
@@ -95,21 +119,65 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
   }, [onClose])
 
   /* ------------------------------- Positioning -------------------------------- */
-  const position = useMemo(() => {
+  // Position is computed from the popup's *measured* size (not a guess) so it
+  // always stays fully on screen: prefer below the selection, flip above when
+  // there isn't room, and clamp to the viewport as a last resort. Recomputed on
+  // resize and whenever the content height changes (e.g. Hindi/AI text loads).
+  const [position, setPosition] = useState<{ left: number; top: number }>(() => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 0
+    return { left: Math.max(12, vw / 2 - POPUP_WIDTH / 2), top: 80 }
+  })
+
+  useLayoutEffect(() => {
+    const el = popupRef.current
+    if (!el) return
+
     const margin = 12
-    const rect = anchor.rect
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    if (!rect) {
-      return { left: vw / 2 - POPUP_WIDTH / 2, top: 80 }
+    const compute = () => {
+      const node = popupRef.current
+      if (!node) return
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const pw = node.offsetWidth || POPUP_WIDTH
+      const ph = node.offsetHeight
+      const rect = anchor.rect
+
+      if (!rect) {
+        setPosition({
+          left: Math.max(margin, vw / 2 - pw / 2),
+          top: Math.max(margin, Math.min(80, vh - ph - margin))
+        })
+        return
+      }
+
+      let left = rect.left + rect.width / 2 - pw / 2
+      left = Math.max(margin, Math.min(left, vw - pw - margin))
+
+      const spaceBelow = vh - rect.bottom - margin
+      const spaceAbove = rect.top - margin
+      let top: number
+      if (spaceBelow >= ph) {
+        top = rect.bottom + margin
+      } else if (spaceAbove >= ph) {
+        top = rect.top - margin - ph
+      } else if (spaceBelow >= spaceAbove) {
+        top = vh - ph - margin
+      } else {
+        top = margin
+      }
+      top = Math.max(margin, Math.min(top, vh - ph - margin))
+
+      setPosition({ left, top })
     }
-    let left = rect.left + rect.width / 2 - POPUP_WIDTH / 2
-    left = Math.max(margin, Math.min(left, vw - POPUP_WIDTH - margin))
-    // Prefer below the selection; flip above if not enough room.
-    const below = rect.bottom + margin
-    const preferBelow = below + 260 < vh || rect.top < vh / 2
-    const top = preferBelow ? below : Math.max(margin, rect.top - margin - 260)
-    return { left, top }
+
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+    window.addEventListener('resize', compute)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', compute)
+    }
   }, [anchor.rect])
 
   /* ------------------------------ Pronunciation ------------------------------- */
@@ -147,6 +215,7 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
     await saveWord({
       word: entry?.word ?? word,
       phonetic: entry?.phonetic,
+      hindi: hindi ?? undefined,
       partOfSpeech: primary?.partOfSpeech,
       definition: primary?.definition,
       example: primary?.example,
@@ -154,7 +223,7 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
       context: anchor.context
     })
     setSaved(true)
-  }, [saved, entry, word, anchor.context])
+  }, [saved, entry, word, hindi, anchor.context])
 
   /* ----------------------------- Explain in context --------------------------- */
   const handleExplain = useCallback(async () => {
@@ -234,13 +303,42 @@ export default function DictionaryPopup({ anchor, settings, onClose }: Props) {
 
           {entry && !loading && (
             <>
-              {entry.meanings.slice(0, 4).map((m, i) => (
-                <div className="meaning" key={i}>
-                  <span className="meaning__pos">{m.partOfSpeech}</span>
-                  <p className="meaning__def">{m.definition}</p>
-                  {m.example && <p className="meaning__example">“{m.example}”</p>}
-                </div>
-              ))}
+              {/* Primary meaning (English) with the Hindi translation alongside —
+                  the thing readers most want, shown first. */}
+              <div className="primary">
+                {entry.meanings[0]?.definition && (
+                  <p className="primary__meaning">{entry.meanings[0].definition}</p>
+                )}
+                {hindiLoading ? (
+                  <div className="primary__hindi">
+                    <span className="primary__hindi-label">हिन्दी</span>
+                    <span className="primary__hindi-pending">
+                      <span className="spinner spinner--sm" /> translating…
+                    </span>
+                  </div>
+                ) : (
+                  hindi && (
+                    <div className="primary__hindi">
+                      <span className="primary__hindi-label">हिन्दी</span>
+                      <span className="primary__hindi-text" lang="hi">
+                        {hindi}
+                      </span>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Grammatical details, additional senses & examples. */}
+              <div className="senses">
+                <span className="section-label">Grammar &amp; usage</span>
+                {entry.meanings.slice(0, 4).map((m, i) => (
+                  <div className="meaning" key={i}>
+                    <span className="meaning__pos">{m.partOfSpeech}</span>
+                    <p className="meaning__def">{m.definition}</p>
+                    {m.example && <p className="meaning__example">“{m.example}”</p>}
+                  </div>
+                ))}
+              </div>
 
               {entry.synonyms.length > 0 && (
                 <div className="synonyms">

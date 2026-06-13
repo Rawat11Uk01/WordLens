@@ -30,6 +30,8 @@ export default defineManifest({
   permissions: ['storage', 'contextMenus', 'scripting', 'activeTab'],
   host_permissions: [
     'https://api.dictionaryapi.dev/*',
+    'https://translate.googleapis.com/*',
+    'https://api.mymemory.translated.net/*',
     'http://localhost/*',
     'http://127.0.0.1/*'
   ],

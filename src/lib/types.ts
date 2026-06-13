@@ -25,6 +25,8 @@ export interface SavedWord {
   id: string
   word: string
   phonetic?: string
+  /** Hindi translation of the word, if available. */
+  hindi?: string
   partOfSpeech?: string
   definition?: string
   example?: string

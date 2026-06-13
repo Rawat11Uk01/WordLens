@@ -162,7 +162,8 @@ If Ollama isn't running or the model isn't installed, the popup shows a friendly
 
 ## Privacy
 
-- **Dictionary lookups** call the free, key-less [dictionaryapi.dev](https://dictionaryapi.dev) over HTTPS (the only network request, and only when you look up a word).
+- **Dictionary lookups** call the free, key-less [dictionaryapi.dev](https://dictionaryapi.dev) over HTTPS, only when you look up a word.
+- **Hindi translations** call the free, key-less [MyMemory](https://mymemory.translated.net) API over HTTPS, only when you look up a word.
 - **AI explanations** run entirely on your machine via Ollama.
 - **Saved words, history, and settings** live in `chrome.storage.local` on your device.
 - No analytics, no tracking, no accounts.
